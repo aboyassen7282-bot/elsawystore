@@ -1,0 +1,27 @@
+import { ArrowLeft, ArrowUpLeft, Camera, Check, ChevronLeft, Headphones, Laptop, ShieldCheck, Sparkles, Wrench } from "lucide-react";
+import { Link } from "wouter";
+import { ProductCard } from "@/components/ProductCard";
+import { StoreShell } from "@/components/StoreShell";
+import { useStore } from "@/lib/store";
+
+const categoryIcons = { laptop: Laptop, camera: Camera, wrench: Wrench, keyboard: Headphones };
+
+export default function Home() {
+  const { categories, products } = useStore();
+  const featured = products.filter((product) => product.visible).slice(0, 4);
+  return <StoreShell>
+    <main>
+      <section className="hero-section"><div className="hero-copy"><div className="section-kicker"><span className="kicker-line" /> متجر التقنية الذكي</div><h1>تقنية تمشي<br /><em>معك.</em></h1><p>من اللابتوب الذي ينجز شغلك، إلى كاميرا تحمي بيتك. نختار لك التقنية الصح، ونجهزها لتشتغل من أول يوم.</p><div className="hero-actions"><Link href="/catalog" className="button primary">استكشف المنتجات <ArrowLeft size={18} /></Link><a href="#services" className="button ghost">تعرف على خدماتنا <ChevronLeft size={17} /></a></div><div className="hero-trust"><div><strong>+12</strong><span>سنة خبرة</span></div><div><strong>4.9/5</strong><span>تقييم العملاء</span></div><div><strong>24/7</strong><span>حلول مراقبة</span></div></div></div><div className="hero-visual"><div className="hero-grid" /><div className="hero-image-wrap"><img src="/assets/elsawy store.png" alt="لابتوب من متجر الصاوى ستور" /></div><div className="hero-floating-card top"><span className="floating-icon cyan"><Sparkles size={16} /></span><div><b>اختيار موثوق</b><small>أجهزة مختبرة بعناية</small></div><ArrowUpLeft size={16} /></div><div className="hero-floating-card bottom"><span className="floating-icon orange"><ShieldCheck size={16} /></span><div><b>ضمان الصاوى ستور</b><small>راحة بالك أولًا</small></div><span className="floating-check"><Check size={13} /></span></div><span className="hero-sticker">حلولك<br />التقنية</span></div></section>
+
+      <section className="categories-section container"><div className="section-heading"><div><span className="eyebrow">تصفح حسب احتياجك</span><h2>خلّينا نبدأ من هنا</h2></div><Link className="text-link" href="/catalog">كل المنتجات <ArrowLeft size={16} /></Link></div><div className="category-grid">{categories.map((category) => { const Icon = categoryIcons[category.icon as keyof typeof categoryIcons] ?? Sparkles; return <Link href={`/catalog?category=${category.id}`} className={`category-card ${category.accent}`} key={category.id}><span className="category-icon"><Icon size={23} /></span><span><small>{category.eyebrow}</small><strong>{category.name}</strong></span><ArrowUpLeft size={17} className="category-arrow" /></Link>; })}</div></section>
+
+      <section className="products-section container"><div className="section-heading"><div><span className="eyebrow">مختارات هذا الأسبوع</span><h2>أشياء تستحق التجربة</h2></div><Link className="text-link" href="/catalog">شوف الكتالوج <ArrowLeft size={16} /></Link></div><div className="product-grid">{featured.map((product) => <ProductCard key={product.id} product={product} />)}</div></section>
+
+      <section className="services-section" id="services"><div className="services-inner container"><div className="services-copy"><span className="eyebrow light">أكثر من مجرد متجر</span><h2>نركّب، نضبط،<br /><span>ونبقى معك.</span></h2><p>اشترِ وأنت مطمئن. فريقنا يساعدك في اختيار الجهاز، تركيبه، ونقل بياناتك. ولو حصل شيء، نحن على بعد مكالمة.</p><Link href="/catalog?category=maintenance" className="button light-button">شوف خدمات الصيانة <ArrowLeft size={18} /></Link></div><div className="service-stack"><div className="service-line"><span className="service-number">01</span><div><h3>تجهيز اللابتوب</h3><p>نثبت برامجك ونضبط جهازك قبل الاستلام.</p></div><Laptop size={24} /></div><div className="service-line"><span className="service-number">02</span><div><h3>تركيب المراقبة</h3><p>من تمديد الكابل إلى ظهور الصورة على جوالك.</p></div><Camera size={24} /></div><div className="service-line"><span className="service-number">03</span><div><h3>صيانة بدون تعقيد</h3><p>فحص واضح وسعر معروف قبل أي خطوة.</p></div><Wrench size={24} /></div></div></div></section>
+
+      <section className="why-section container" id="why-us"><div className="why-intro"><span className="eyebrow">لماذا الصاوى ستور؟</span><h2>نبيع التقنية،<br /><em>ونفهم استخدامها.</em></h2></div><div className="why-points"><div><span className="point-icon"><ShieldCheck size={20} /></span><div><h3>ضمان واضح</h3><p>لا مفاجآت في الشروط. نوضح لك كل شيء قبل الدفع.</p></div></div><div><span className="point-icon"><Headphones size={20} /></span><div><h3>ناس ترد عليك</h3><p>دعم محلي يفهم سؤالك ويرشدك للحل المناسب.</p></div></div><div><span className="point-icon"><Sparkles size={20} /></span><div><h3>اختيارات منتقاة</h3><p>منتجات أقل، لكن أفضل. كل قطعة لها سبب في رفوفنا.</p></div></div></div></section>
+
+      {/* <section className="newsletter-section container"><div><span className="eyebrow">خليك على اطلاع</span><h2>العروض الجديدة توصلك أولًا.</h2><p>رسالة خفيفة كل فترة، فيها خصم مفيد ونصيحة تقنية بدون إزعاج.</p></div><form onSubmit={(event) => { event.preventDefault(); alert("تم تسجيل بريدك بنجاح"); }}><input type="email" required placeholder="بريدك الإلكتروني" aria-label="البريد الإلكتروني" /><button className="button primary" type="submit">سجّلني <ArrowLeft size={17} /></button></form></section> */}
+    </main>
+  </StoreShell>;
+}
