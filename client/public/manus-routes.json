@@ -1,8 +1,12 @@
+
 {
-  "routes": [
-    { "path": "/", "title": "الرئيسية | تك مارت" },
-    { "path": "/catalog", "title": "المنتجات | تك مارت" },
-    { "path": "/admin", "title": "لوحة الإدارة | تك مارت" },
-    { "path": "/404", "title": "الصفحة غير موجودة | تك مارت" }
+  "version": 2,
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist/public",
+  "rewrites": [
+    {
+      "source": "^/(?!api(?:/|$)).*$",
+      "destination": "/index.html"
+    }
   ]
 }
