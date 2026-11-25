@@ -5,7 +5,7 @@
   "outputDirectory": "dist/public",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/:path((?!api/).*)",
       "destination": "/index.html"
     }
   ]
