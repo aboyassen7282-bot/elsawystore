@@ -92,9 +92,7 @@ export default function Admin() {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // لا يتم وضع البريد الإلكتروني مسبقًا في خانة الدخول
   const [email, setEmail] = useState("");
-
   const [password, setPassword] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
 
@@ -107,7 +105,7 @@ export default function Admin() {
           setUser(
             currentUser
               ? {
-                  email: currentUser.email,
+                  email: currentUser.email ?? "",
                   name: "مدير المتجر",
                   role: "admin",
                 }
@@ -349,12 +347,8 @@ function AdminPanel({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // قاعدة البيانات الحالية لا تحتوي على عمود visible.
-  // لذلك جميع المنتجات المسجلة تُعرض في الكتالوج.
   const visibleProducts = products.length;
 
-  // المخزون في قاعدة البيانات Boolean فقط:
-  // متوفر أو غير متوفر.
   const unavailableProducts = products.filter(
     (product) => product.stock <= 0
   ).length;
@@ -464,8 +458,6 @@ function AdminPanel({
   const uploadProductImages = async (files?: FileList) => {
     if (!files?.length) return;
 
-    // جدول products الحالي يحتوي على عمود image واحد فقط.
-    // لذلك نرفع صورة واحدة ونحفظ رابطها في هذا العمود.
     const file = files[0];
 
     if (files.length > 1) {

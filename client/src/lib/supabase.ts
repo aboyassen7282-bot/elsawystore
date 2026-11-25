@@ -224,14 +224,21 @@ export async function supabaseRequest<T>(
     );
   }
 
-  const token = getSupabaseAccessToken() ?? key;
+  const method = (options.method ?? "GET").toUpperCase();
+
+  // القراءة تستخدم anon key.
+  // التعديل والإضافة والحذف تستخدم جلسة الأدمن.
+  const token =
+    method === "GET" || method === "HEAD"
+      ? key
+      : getSupabaseAccessToken() ?? key;
 
   const response = await fetch(
     `${url}/rest/v1/${table}${
       options.query ? `?${options.query}` : ""
     }`,
     {
-      method: options.method ?? "GET",
+      method,
       headers: {
         apikey: key,
         Authorization: `Bearer ${token}`,
@@ -279,7 +286,7 @@ export async function uploadProductImage(
   const token = getSupabaseAccessToken() ?? key;
 
   const safeName = file.name.replace(
-    /[^a-zA-Z0-9._-]/g,
+    /[^a-zA-Z0-9.\_-]/g,
     "-"
   );
 
