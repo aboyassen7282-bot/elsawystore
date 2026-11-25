@@ -1,92 +1,211 @@
 
-import { createClient } from "@supabase/supabase-js";
-
-const url = import.meta.env.VITE_SUPABASE_URL?.replace(/\/+$/, "");
+const url = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "");
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const ADMIN_EMAIL = "aboyassen7282@gmail.com";
+const SESSION_KEY = "elsawy_admin_session";
 
-const ALLOWED_IMAGE_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-];
+export const AUTH_CHANGE_EVENT = "elsawy-auth-changed";
+
+type AuthSession = {
+  access_token: string;
+  refresh_token: string;
+  expires_at?: number;
+};
 
 export const supabaseConfigured = Boolean(url && key);
 
-if (!url || !key) {
-  console.error(
-    "Supabase is not configured. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY."
-  );
+function notifyAuthChange() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
+  }
 }
 
-export const supabase = createClient(
-  url || "https://example.supabase.co",
-  key || "missing-anon-key",
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      flowType: "pkce",
-    },
+function getSession(): AuthSession | null {
+  try {
+    const saved = localStorage.getItem(SESSION_KEY);
+    return saved ? (JSON.parse(saved) as AuthSession) : null;
+  } catch {
+    return null;
   }
-);
+}
 
-/**
- * تسجيل الدخول باستخدام Google.
- */
-export async function signInWithGoogle() {
-  if (!supabaseConfigured) {
+// الحصول على Access Token الخاص بجلسة Supabase
+export function getSupabaseAccessToken(): string | null {
+  return getSession()?.access_token ?? null;
+}
+
+// حفظ الجلسة وإبلاغ التطبيق بأي تغيير في حالة الدخول
+function saveSession(session: AuthSession | null) {
+  if (session) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } else {
+    localStorage.removeItem(SESSION_KEY);
+  }
+
+  notifyAuthChange();
+}
+
+// إرسال طلبات المصادقة إلى Supabase
+async function authRequest<T>(
+  endpoint: string,
+  options: {
+    method?: string;
+    body?: unknown;
+    token?: string;
+  } = {}
+): Promise<T> {
+  if (!url || !key) {
     throw new Error("إعدادات Supabase غير مكتملة");
   }
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: `${window.location.origin}/admin`,
-      scopes: "openid email profile",
+  const response = await fetch(`${url}/auth/v1/${endpoint}`, {
+    method: options.method ?? "GET",
+    headers: {
+      apikey: key,
+      "Content-Type": "application/json",
+      ...(options.token
+        ? { Authorization: `Bearer ${options.token}` }
+        : {}),
+    },
+    ...(options.body !== undefined
+      ? { body: JSON.stringify(options.body) }
+      : {}),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      payload.msg ||
+        payload.message ||
+        payload.error_description ||
+        payload.error ||
+        "تعذر الاتصال بنظام تسجيل الدخول"
+    );
+  }
+
+  return payload as T;
+}
+
+// تسجيل دخول مدير المتجر
+export async function adminSignIn(
+  email: string,
+  password: string
+) {
+  if (email.trim().toLowerCase() !== ADMIN_EMAIL) {
+    throw new Error(
+      "هذا الحساب غير مصرح له بدخول لوحة الإدارة"
+    );
+  }
+
+  const result = await authRequest<
+    AuthSession & {
+      user: { email?: string };
+      expires_in?: number;
+    }
+  >("token?grant_type=password", {
+    method: "POST",
+    body: {
+      email: email.trim(),
+      password,
     },
   });
 
-  if (error) {
-    throw error;
+  if (result.user?.email?.toLowerCase() !== ADMIN_EMAIL) {
+    saveSession(null);
+
+    throw new Error(
+      "هذا الحساب غير مصرح له بدخول لوحة الإدارة"
+    );
   }
 
-  return data;
+  saveSession({
+    access_token: result.access_token,
+    refresh_token: result.refresh_token,
+    expires_at:
+      Math.floor(Date.now() / 1000) +
+      (result.expires_in ?? 3600),
+  });
+
+  return result.user;
 }
 
-/**
- * تسجيل الخروج من Supabase.
- */
-export async function signOutFromGoogle() {
-  const { error } = await supabase.auth.signOut();
+// التحقق من المستخدم وتجديد الجلسة عند الحاجة
+export async function getAdminUser() {
+  let session = getSession();
 
-  if (error) {
-    throw error;
+  if (!session) return null;
+
+  try {
+    if (
+      session.expires_at &&
+      session.expires_at <
+        Math.floor(Date.now() / 1000) + 60
+    ) {
+      const refreshed = await authRequest<
+        AuthSession & {
+          expires_in?: number;
+        }
+      >("token?grant_type=refresh_token", {
+        method: "POST",
+        body: {
+          refresh_token: session.refresh_token,
+        },
+      });
+
+      session = {
+        access_token: refreshed.access_token,
+        refresh_token: refreshed.refresh_token,
+        expires_at:
+          Math.floor(Date.now() / 1000) +
+          (refreshed.expires_in ?? 3600),
+      };
+
+      saveSession(session);
+    }
+
+    const user = await authRequest<{
+      id: string;
+      email?: string;
+    }>("user", {
+      token: session.access_token,
+    });
+
+    if (user.email?.toLowerCase() !== ADMIN_EMAIL) {
+      saveSession(null);
+      return null;
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: "مدير المتجر",
+      role: "admin" as const,
+    };
+  } catch {
+    saveSession(null);
+    return null;
   }
 }
 
-/**
- * الحصول على Access Token للمستخدم الحالي.
- */
-export async function getSupabaseAccessToken(): Promise<string | null> {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+// تسجيل خروج مدير المتجر
+export async function adminSignOut() {
+  const session = getSession();
 
-  if (error) {
-    throw error;
+  try {
+    if (session?.access_token) {
+      await authRequest("logout", {
+        method: "POST",
+        token: session.access_token,
+      });
+    }
+  } finally {
+    saveSession(null);
   }
-
-  return session?.access_token ?? null;
 }
 
-/**
- * تنفيذ طلبات قاعدة بيانات Supabase.
- */
+// تنفيذ طلبات قاعدة بيانات Supabase
 export async function supabaseRequest<T>(
   table: string,
   options: {
@@ -102,17 +221,21 @@ export async function supabaseRequest<T>(
     );
   }
 
-  const accessToken = await getSupabaseAccessToken();
+  const token = getSupabaseAccessToken() ?? key;
 
   const response = await fetch(
-    `${url}/rest/v1/${table}${options.query ? `?${options.query}` : ""}`,
+    `${url}/rest/v1/${table}${
+      options.query ? `?${options.query}` : ""
+    }`,
     {
       method: options.method ?? "GET",
       headers: {
         apikey: key,
-        Authorization: `Bearer ${accessToken || key}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
-        ...(options.prefer ? { Prefer: options.prefer } : {}),
+        ...(options.prefer
+          ? { Prefer: options.prefer }
+          : {}),
       },
       ...(options.body !== undefined
         ? { body: JSON.stringify(options.body) }
@@ -132,62 +255,52 @@ export async function supabaseRequest<T>(
         parsed.details ||
         parsed.hint ||
         payload;
-    } catch {
-      // الاحتفاظ برسالة الخطأ الأصلية
-    }
+    } catch {}
 
-    throw new Error(`Supabase (${response.status}): ${message}`);
+    throw new Error(
+      `Supabase (${response.status}): ${message}`
+    );
   }
 
   return (payload ? JSON.parse(payload) : null) as T;
 }
 
-/**
- * رفع صورة المنتج إلى Storage عن طريق السيرفر.
- */
-export async function uploadProductImage(file: File): Promise<string> {
-  if (!file) {
-    throw new Error("من فضلك اختر صورة أولاً");
+// رفع صور المنتجات إلى Supabase Storage
+export async function uploadProductImage(
+  file: File
+): Promise<string> {
+  if (!url || !key) {
+    throw new Error("إعدادات Supabase غير مكتملة");
   }
 
-  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-    throw new Error(
-      "نوع الصورة غير مدعوم. استخدم JPG أو PNG أو WEBP أو GIF"
-    );
-  }
+  const token = getSupabaseAccessToken() ?? key;
 
-  if (file.size > MAX_IMAGE_SIZE) {
-    throw new Error("حجم الصورة أكبر من 5 ميجابايت");
-  }
+  const safeName = file.name.replace(
+    /[^a-zA-Z0-9._-]/g,
+    "-"
+  );
 
-  const accessToken = await getSupabaseAccessToken();
+  const path = `products/${Date.now()}-${safeName}`;
 
-  if (!accessToken) {
-    throw new Error("يجب تسجيل الدخول أولاً قبل رفع الصور");
-  }
-
-  const response = await fetch("/api/admin/upload-product-image", {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/octet-stream",
-      "x-file-type": file.type,
-    },
-    body: file,
-  });
-
-  const payload = await response.json().catch(() => ({}));
+  const response = await fetch(
+    `${url}/storage/v1/object/product-images/${path}`,
+    {
+      method: "POST",
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": file.type,
+        "x-upsert": "true",
+      },
+      body: file,
+    }
+  );
 
   if (!response.ok) {
     throw new Error(
-      payload.error || `فشل رفع الصورة (${response.status})`
+      `فشل رفع الصورة: ${await response.text()}`
     );
   }
 
-  if (!payload.url || typeof payload.url !== "string") {
-    throw new Error("لم يتم استلام رابط الصورة من السيرفر");
-  }
-
-  return payload.url;
+  return `${url}/storage/v1/object/public/product-images/${path}`;
 }

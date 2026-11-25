@@ -1,16 +1,24 @@
 
 import {
-  signInWithGoogle,
-  signOutFromGoogle,
-  supabase,
+  adminSignIn,
+  adminSignOut,
+  getAdminUser,
+  AUTH_CHANGE_EVENT,
 } from "@/lib/supabase";
-import { trpc } from "@/lib/trpc";
+
 import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
+  useState,
 } from "react";
+
+type AdminUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: "admin";
+};
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -23,100 +31,127 @@ export function useAuth(options?: UseAuthOptions) {
     redirectPath,
   } = options ?? {};
 
-  const utils = trpc.useUtils();
-  const loginStarted = useRef(false);
+  const [user, setUser] = useState<AdminUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-  const meQuery = trpc.auth.me.useQuery(undefined, {
-    retry: false,
-    refetchOnWindowFocus: true,
-  });
+  const refresh = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-  const login = useCallback(async () => {
-    await signInWithGoogle();
+      const currentUser = await getAdminUser();
+
+      setUser(currentUser as AdminUser | null);
+
+      return currentUser;
+    } catch (err) {
+      setUser(null);
+
+      setError(
+        err instanceof Error
+          ? err
+          : new Error("حدث خطأ أثناء التحقق من تسجيل الدخول")
+      );
+
+      return null;
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void refresh();
+
+    const handleAuthChange = () => {
+      void refresh();
+    };
+
+    window.addEventListener(
+      AUTH_CHANGE_EVENT,
+      handleAuthChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        AUTH_CHANGE_EVENT,
+        handleAuthChange
+      );
+    };
+  }, [refresh]);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      if (!email || !password) {
+        throw new Error(
+          "من فضلك أدخل البريد الإلكتروني وكلمة المرور"
+        );
+      }
+
+      const result = await adminSignIn(email, password);
+
+      const currentUser = await getAdminUser();
+
+      if (!currentUser) {
+        throw new Error(
+          "تم تسجيل الدخول لكن تعذر التحقق من حساب المدير"
+        );
+      }
+
+      setUser(currentUser as AdminUser);
+      setError(null);
+
+      return result;
+    },
+    []
+  );
 
   const logout = useCallback(async () => {
     try {
-      await signOutFromGoogle();
+      await adminSignOut();
     } finally {
-      utils.auth.me.setData(undefined, null);
-      await utils.auth.me.invalidate();
+      setUser(null);
+      setError(null);
     }
-  }, [utils]);
+  }, []);
 
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (
-        event === "SIGNED_IN" ||
-        event === "SIGNED_OUT" ||
-        event === "TOKEN_REFRESHED" ||
-        event === "USER_UPDATED"
-      ) {
-        void utils.auth.me.invalidate();
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [utils]);
-
-  const state = useMemo(() => {
-    return {
-      user: meQuery.data ?? null,
-      loading: meQuery.isLoading,
-      error: meQuery.error ?? null,
-      isAuthenticated: Boolean(meQuery.data),
-    };
-  }, [
-    meQuery.data,
-    meQuery.error,
-    meQuery.isLoading,
-  ]);
-
-  useEffect(() => {
-    if (!redirectOnUnauthenticated) return;
-    if (meQuery.isLoading) return;
-    if (state.user) {
-      loginStarted.current = false;
-      return;
-    }
-
-    if (typeof window === "undefined") return;
-    if (loginStarted.current) return;
-
     if (
-      redirectPath &&
-      window.location.pathname === redirectPath
+      !redirectOnUnauthenticated ||
+      loading ||
+      user
     ) {
       return;
     }
 
-    loginStarted.current = true;
+    if (typeof window === "undefined") return;
 
     if (redirectPath) {
-      window.location.href = redirectPath;
-      return;
+      if (window.location.pathname !== redirectPath) {
+        window.location.href = redirectPath;
+      }
     }
-
-    void login().catch((error) => {
-      loginStarted.current = false;
-      console.error("[Google Login Error]", error);
-    });
   }, [
     redirectOnUnauthenticated,
     redirectPath,
-    meQuery.isLoading,
-    state.user,
-    login,
+    loading,
+    user,
   ]);
+
+  const state = useMemo(
+    () => ({
+      user,
+      loading,
+      error,
+      isAuthenticated: Boolean(user),
+    }),
+    [user, loading, error]
+  );
 
   return {
     ...state,
     login,
     logout,
-    refresh: () => meQuery.refetch(),
+    refresh,
   };
 }

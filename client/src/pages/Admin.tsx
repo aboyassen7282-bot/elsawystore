@@ -17,14 +17,20 @@ import {
   X,
 } from "lucide-react";
 
-import { useAuth } from "@/_core/hooks/useAuth";
 import {
   formatPrice,
   Product,
   StoreSettings,
   useStore,
 } from "@/lib/store";
-import { uploadProductImage } from "@/lib/supabase";
+
+import {
+  adminSignIn,
+  adminSignOut,
+  getAdminUser,
+  uploadProductImage,
+} from "@/lib/supabase";
+
 import { toast } from "sonner";
 
 type AdminTab = "overview" | "products" | "categories" | "settings";
@@ -50,6 +56,12 @@ type SettingsForm = Pick<
   | "banner_url"
 >;
 
+type AdminUser = {
+  email: string;
+  name: string;
+  role: "admin";
+};
+
 const emptyProduct = (categoryId: string): ProductForm => ({
   name: "",
   categoryId,
@@ -73,55 +85,167 @@ const emptyCategory = (): CategoryForm => ({
 });
 
 // ==========================================
-// Admin Authentication - Google / Supabase
+// Admin Authentication - Supabase Email
 // ==========================================
 
 export default function Admin() {
-  const auth = useAuth({ redirectOnUnauthenticated: true });
+  const [user, setUser] = useState<AdminUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState("aboyassen7282@gmail.com");
+  const [password, setPassword] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
 
-  if (auth.loading) {
+  useEffect(() => {
+    let active = true;
+
+    getAdminUser()
+      .then((currentUser) => {
+        if (active) {
+          setUser(
+            currentUser
+              ? {
+                  email: currentUser.email,
+                  name: "مدير المتجر",
+                  role: "admin",
+                }
+              : null
+          );
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setUser(null);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleLogin = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    if (!email.trim() || !password) {
+      toast.error("اكتب الإيميل وكلمة المرور");
+      return;
+    }
+
+    setLoggingIn(true);
+
+    try {
+      const signedInUser = await adminSignIn(email, password);
+
+      setUser({
+        email: signedInUser.email ?? email,
+        name: "مدير المتجر",
+        role: "admin",
+      });
+
+      setPassword("");
+
+      toast.success("تم تسجيل الدخول بنجاح");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "فشل تسجيل الدخول"
+      );
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await adminSignOut();
+      setUser(null);
+      setPassword("");
+      toast.success("تم تسجيل الخروج");
+    } catch (error) {
+      setUser(null);
+      setPassword("");
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تم تسجيل الخروج"
+      );
+    }
+  };
+
+  if (loading) {
     return (
       <AdminState
         icon={<ShieldCheck size={25} />}
-        title="نراجع صلاحية الدخول"
-        text="ثواني ونجهز لك لوحة الإدارة."
+        title="جارٍ التحقق من الدخول"
+        text="لحظات ونجهز لوحة الإدارة."
       />
     );
   }
 
-  if (!auth.isAuthenticated) {
+  if (!user) {
     return (
       <AdminState
         locked
-        title="لوحة الإدارة محمية"
-        text="سجّل الدخول باستخدام حساب Google المصرح له بإدارة متجر الصاوى ستور."
+        title="تسجيل دخول مدير المتجر"
+        text="اكتب الإيميل وكلمة المرور للدخول إلى لوحة الإدارة."
         action={
-          <button
-            className="button primary"
-            onClick={() => auth.login()}
+          <form
+            onSubmit={handleLogin}
+            className="admin-login-form"
           >
-            تسجيل الدخول باستخدام Google
-            <ChevronLeft size={17} />
-          </button>
-        }
-      />
-    );
-  }
+            <label>
+              البريد الإلكتروني
 
-  if (auth.user?.role !== "admin") {
-    return (
-      <AdminState
-        locked
-        title="لا توجد صلاحية كافية"
-        text="حسابك مسجل، لكنه لا يملك صلاحية مدير المتجر. استخدم حساب Google المصرح له."
-        action={
-          <button
-            className="button secondary"
-            onClick={() => auth.logout()}
-          >
-            تسجيل الخروج
-            <LogOut size={16} />
-          </button>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) =>
+                  setEmail(event.target.value)
+                }
+                autoComplete="username"
+                required
+                dir="ltr"
+                placeholder="name@example.com"
+              />
+            </label>
+
+            <label>
+              كلمة المرور
+
+              <input
+                type="password"
+                value={password}
+                onChange={(event) =>
+                  setPassword(event.target.value)
+                }
+                autoComplete="current-password"
+                required
+                dir="ltr"
+                placeholder="كلمة المرور"
+              />
+            </label>
+
+            <button
+              className="button primary"
+              type="submit"
+              disabled={loggingIn}
+            >
+              {loggingIn
+                ? "جارٍ تسجيل الدخول..."
+                : "تسجيل الدخول"}
+
+              <ChevronLeft size={17} />
+            </button>
+          </form>
         }
       />
     );
@@ -129,8 +253,8 @@ export default function Admin() {
 
   return (
     <AdminPanel
-      userName={auth.user.name ?? "مدير المتجر"}
-      logout={auth.logout}
+      userName={user.name}
+      logout={handleLogout}
     />
   );
 }
@@ -512,7 +636,7 @@ function AdminPanel({
             <span>
               حسابك محمي
               <br />
-              <small>Google OAuth · Supabase Auth</small>
+              <small>Supabase Auth</small>
             </span>
           </div>
 
@@ -1292,7 +1416,7 @@ function SettingsView({
 
             <div>
               <strong>مدير المتجر</strong>
-              <small>Google OAuth · Supabase Auth</small>
+              <small>Supabase Auth</small>
             </div>
 
             <span className="status-badge done">

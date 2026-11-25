@@ -1,3 +1,4 @@
+
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -19,13 +20,16 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import {
+  LayoutDashboard,
+  LogOut,
+  PanelLeft,
+  Users,
+} from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
-import { Button } from "./ui/button";
+import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Page 1", path: "/" },
@@ -44,37 +48,41 @@ export default function DashboardLayout({
 }) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
-    return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
+    const parsed = saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
+
+    return Number.isFinite(parsed) &&
+      parsed >= MIN_WIDTH &&
+      parsed <= MAX_WIDTH
+      ? parsed
+      : DEFAULT_WIDTH;
   });
+
   const { loading, user } = useAuth();
 
   useEffect(() => {
-    localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
+    localStorage.setItem(
+      SIDEBAR_WIDTH_KEY,
+      sidebarWidth.toString()
+    );
   }, [sidebarWidth]);
 
   if (loading) {
-    return <DashboardLayoutSkeleton />
+    return <DashboardLayoutSkeleton />;
   }
 
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
-          <div className="flex flex-col items-center gap-6">
+        <div className="flex flex-col items-center gap-6 p-8 max-w-md w-full">
+          <div className="flex flex-col items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight text-center">
-              Sign in to continue
+              تسجيل الدخول مطلوب
             </h1>
+
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Access to this dashboard requires authentication. Continue to launch the login flow.
+              يجب تسجيل الدخول بحساب مدير المتجر للوصول إلى لوحة الإدارة.
             </p>
           </div>
-          <Button
-            onClick={() => startLogin()}
-            size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
-          >
-            Sign in
-          </Button>
         </div>
       </div>
     );
@@ -88,7 +96,9 @@ export default function DashboardLayout({
         } as CSSProperties
       }
     >
-      <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
+      <DashboardLayoutContent
+        setSidebarWidth={setSidebarWidth}
+      >
         {children}
       </DashboardLayoutContent>
     </SidebarProvider>
@@ -107,10 +117,15 @@ function DashboardLayoutContent({
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
+
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.path === location);
+
+  const activeMenuItem = menuItems.find(
+    (item) => item.path === location
+  );
+
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -123,9 +138,15 @@ function DashboardLayoutContent({
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
 
-      const sidebarLeft = sidebarRef.current?.getBoundingClientRect().left ?? 0;
+      const sidebarLeft =
+        sidebarRef.current?.getBoundingClientRect().left ?? 0;
+
       const newWidth = e.clientX - sidebarLeft;
-      if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
+
+      if (
+        newWidth >= MIN_WIDTH &&
+        newWidth <= MAX_WIDTH
+      ) {
         setSidebarWidth(newWidth);
       }
     };
@@ -135,15 +156,31 @@ function DashboardLayoutContent({
     };
 
     if (isResizing) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener(
+        "mousemove",
+        handleMouseMove
+      );
+
+      document.addEventListener(
+        "mouseup",
+        handleMouseUp
+      );
+
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
     }
 
     return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener(
+        "mousemove",
+        handleMouseMove
+      );
+
+      document.removeEventListener(
+        "mouseup",
+        handleMouseUp
+      );
+
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
@@ -166,6 +203,7 @@ function DashboardLayoutContent({
               >
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
+
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-semibold tracking-tight truncate">
@@ -178,19 +216,23 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
+              {menuItems.map((item) => {
                 const isActive = location === item.path;
+
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
+                      className="h-10 transition-all font-normal"
                     >
                       <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                        className={`h-4 w-4 ${
+                          isActive ? "text-primary" : ""
+                        }`}
                       />
+
                       <span>{item.label}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -208,30 +250,36 @@ function DashboardLayoutContent({
                       {user?.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
+
                   <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
                     <p className="text-sm font-medium truncate leading-none">
                       {user?.name || "-"}
                     </p>
+
                     <p className="text-xs text-muted-foreground truncate mt-1.5">
                       {user?.email || "-"}
                     </p>
                   </div>
                 </button>
               </DropdownMenuTrigger>
+
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem
-                  onClick={logout}
+                  onClick={() => void logout()}
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Sign out</span>
+                  <span>تسجيل الخروج</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarFooter>
         </Sidebar>
+
         <div
-          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
+          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${
+            isCollapsed ? "hidden" : ""
+          }`}
           onMouseDown={() => {
             if (isCollapsed) return;
             setIsResizing(true);
@@ -245,6 +293,7 @@ function DashboardLayoutContent({
           <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
+
               <div className="flex items-center gap-3">
                 <div className="flex flex-col gap-1">
                   <span className="tracking-tight text-foreground">
@@ -255,7 +304,10 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="flex-1 p-4">{children}</main>
+
+        <main className="flex-1 p-4">
+          {children}
+        </main>
       </SidebarInset>
     </>
   );
