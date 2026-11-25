@@ -2,7 +2,6 @@
 const url = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "");
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const ADMIN_EMAIL = "aboyassen7282@gmail.com";
 const SESSION_KEY = "elsawy_admin_session";
 
 export const AUTH_CHANGE_EVENT = "elsawy-auth-changed";
@@ -11,6 +10,14 @@ type AuthSession = {
   access_token: string;
   refresh_token: string;
   expires_at?: number;
+};
+
+type SupabaseUser = {
+  id: string;
+  email?: string;
+  app_metadata?: {
+    role?: string;
+  };
 };
 
 export const supabaseConfigured = Boolean(url && key);
@@ -44,6 +51,11 @@ function saveSession(session: AuthSession | null) {
   }
 
   notifyAuthChange();
+}
+
+// التحقق من صلاحية المدير
+function isAdmin(user: SupabaseUser): boolean {
+  return user.app_metadata?.role === "admin";
 }
 
 // إرسال طلبات المصادقة إلى Supabase
@@ -93,15 +105,9 @@ export async function adminSignIn(
   email: string,
   password: string
 ) {
-  if (email.trim().toLowerCase() !== ADMIN_EMAIL) {
-    throw new Error(
-      "هذا الحساب غير مصرح له بدخول لوحة الإدارة"
-    );
-  }
-
   const result = await authRequest<
     AuthSession & {
-      user: { email?: string };
+      user: SupabaseUser;
       expires_in?: number;
     }
   >("token?grant_type=password", {
@@ -112,7 +118,7 @@ export async function adminSignIn(
     },
   });
 
-  if (result.user?.email?.toLowerCase() !== ADMIN_EMAIL) {
+  if (!result.user || !isAdmin(result.user)) {
     saveSession(null);
 
     throw new Error(
@@ -165,14 +171,11 @@ export async function getAdminUser() {
       saveSession(session);
     }
 
-    const user = await authRequest<{
-      id: string;
-      email?: string;
-    }>("user", {
+    const user = await authRequest<SupabaseUser>("user", {
       token: session.access_token,
     });
 
-    if (user.email?.toLowerCase() !== ADMIN_EMAIL) {
+    if (!isAdmin(user)) {
       saveSession(null);
       return null;
     }

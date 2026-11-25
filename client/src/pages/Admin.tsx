@@ -91,7 +91,10 @@ const emptyCategory = (): CategoryForm => ({
 export default function Admin() {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState("aboyassen7282@gmail.com");
+
+  // لا يتم وضع البريد الإلكتروني مسبقًا في خانة الدخول
+  const [email, setEmail] = useState("");
+
   const [password, setPassword] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
 
@@ -168,10 +171,12 @@ export default function Admin() {
       await adminSignOut();
       setUser(null);
       setPassword("");
+      setEmail("");
       toast.success("تم تسجيل الخروج");
     } catch (error) {
       setUser(null);
       setPassword("");
+      setEmail("");
 
       toast.error(
         error instanceof Error
